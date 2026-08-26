@@ -21,14 +21,14 @@ static const char *TAG = "MOTOR_DRIVER";
 #define PWM_CHANNEL_L   LEDC_CHANNEL_0
 #define PWM_CHANNEL_R   LEDC_CHANNEL_1
 #define PWM_DUTY_RES    LEDC_TIMER_10_BIT
-#define PWM_FREQ        5000
+#define PWM_FREQ        1000
 #define MAX_DUTY        1023
 
 // --- Yumuşatma Filtre Katsayısı (Alpha) ---
 // 0.05 -> Çok yumuşak / süzülen tepki (Ağır İKA hissi)
 // 0.10 -> Dengeli yumuşaklık (Önerilen)
 // 0.20 -> Daha seri ama darbesiz tepki
-#define SMOOTHING_ALPHA 0.08f
+#define SMOOTHING_ALPHA 1.0f
 
 static volatile float target_left = 0.0f;
 static volatile float target_right = 0.0f;

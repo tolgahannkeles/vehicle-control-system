@@ -23,6 +23,14 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:24px; h
 .stop-btn:active { background:#b71c1c; transform:scale(0.98); }
 .status { font-size:0.85rem; color:#8d99ae; margin-top:8px; text-align:center; font-weight:bold; }
 .disabled-overlay { opacity:0.35; pointer-events:none; filter:grayscale(1); }
+
+/* OTA Stilleri */
+.ota-box { border-top: 1px solid #2d3748; padding-top: 12px; margin-top: 5px; text-align: center; }
+.ota-box input[type=file] { display: none; }
+.ota-btn { background: #2d3748; border: 1px solid #4ea8de; color: #4ea8de; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: bold; display: inline-block; margin-top: 6px; }
+.ota-btn:hover { background: #4ea8de; color: #121820; }
+.progress-bar { width: 100%; height: 6px; background: #2d3748; border-radius: 3px; margin-top: 10px; overflow: hidden; display: none; }
+.progress-fill { width: 0%; height: 100%; background: #06d6a0; transition: width 0.2s; }
 </style>
 </head>
 <body>
@@ -54,25 +62,27 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:24px; h
 <div class="card" style="padding:8px 15px;">
   <button class="stop-btn" onclick="emergencyStop()">ACİL DURDUR (E-STOP)</button>
   <div class="status" id="wsStat">Bağlantı Başlatılıyor...</div>
+  
+  <!-- OTA Alanı -->
+  <div class="ota-box">
+    <div style="font-size:0.8rem; color:#a0aec0;">Kablosuz Güncelleme (OTA)</div>
+    <input type="file" id="otaFile" accept=".bin" onchange="uploadFirmware()">
+    <label for="otaFile" class="ota-btn" id="otaBtnLabel">Yeni Firmware (.bin) Seç</label>
+    <div class="progress-bar" id="pBar"><div class="progress-fill" id="pFill"></div></div>
+    <div id="otaStatus" style="font-size:0.75rem; color:#a0aec0; margin-top:6px;"></div>
+  </div>
 </div>
 
 <script>
 var ws = null, throttle = 0, steer = 0, maxPower = 0.8, isControlOwner = false;
 var myToken = "C_" + Math.floor(Math.random() * 899999 + 100000);
 
-var tVal = document.getElementById('tVal');
-var sVal = document.getElementById('sVal');
-var pVal = document.getElementById('pVal');
-var wsStat = document.getElementById('wsStat');
-var throttleSlider = document.getElementById('throttleSlider');
-var powerSlider = document.getElementById('powerSlider');
-var c1 = document.getElementById('c1');
-var c2 = document.getElementById('c2');
+var tVal = document.getElementById('tVal'), sVal = document.getElementById('sVal'), pVal = document.getElementById('pVal');
+var wsStat = document.getElementById('wsStat'), throttleSlider = document.getElementById('throttleSlider'), powerSlider = document.getElementById('powerSlider');
+var c1 = document.getElementById('c1'), c2 = document.getElementById('c2');
 
 function connectWS() {
-  var host = window.location.host;
-  if (!host) host = "192.168.1.151";
-  
+  var host = window.location.host || "192.168.1.151";
   ws = new WebSocket("ws://" + host + "/ws");
   
   ws.onopen = function() {
@@ -98,7 +108,7 @@ function connectWS() {
     }
   };
   
-  ws.onerror = function(err) {
+  ws.onerror = function() {
     wsStat.innerText = "Bağlantı Hatası!";
     wsStat.style.color = "#e63946";
   };
@@ -134,26 +144,19 @@ powerSlider.addEventListener('input', function(e) {
   sendControl();
 });
 
-var stick = document.getElementById('stick');
-var knob = document.getElementById('knob');
-var dragging = false;
-
+var stick = document.getElementById('stick'), knob = document.getElementById('knob'), dragging = false;
 function handleMove(clientX, clientY) {
   if (!isControlOwner && ws && ws.readyState === WebSocket.OPEN) return;
   var rect = stick.getBoundingClientRect();
-  var cx = rect.left + rect.width / 2;
-  var cy = rect.top + rect.height / 2;
-  var dx = clientX - cx;
-  var dy = clientY - cy;
+  var dx = clientX - (rect.left + rect.width / 2);
+  var dy = clientY - (rect.top + rect.height / 2);
   var dist = Math.min(60, Math.hypot(dx, dy));
   var angle = Math.atan2(dy, dx);
-  var kx = dist * Math.cos(angle);
-  var ky = dist * Math.sin(angle);
+  var kx = dist * Math.cos(angle), ky = dist * Math.sin(angle);
   knob.style.transform = "translate(" + kx + "px, " + ky + "px)";
   steer = Math.round((kx / 60) * 1000);
   sendControl();
 }
-
 stick.addEventListener('pointerdown', function(e) { dragging = true; handleMove(e.clientX, e.clientY); });
 window.addEventListener('pointermove', function(e) { if(dragging) handleMove(e.clientX, e.clientY); });
 window.addEventListener('pointerup', function() {
@@ -171,8 +174,72 @@ function emergencyStop() {
   knob.style.transform = "translate(0px, 0px)";
   sendControl();
 }
-
 setInterval(sendControl, 80);
+
+// --- OTA Upload Mantığı ---
+// --- OTA Upload Mantığı ---
+function uploadFirmware() {
+  var fileInput = document.getElementById('otaFile');
+  if (fileInput.files.length === 0) return;
+
+  var file = fileInput.files[0];
+  var xhr = new XMLHttpRequest();
+  var pBar = document.getElementById('pBar');
+  var pFill = document.getElementById('pFill');
+  var otaStatus = document.getElementById('otaStatus');
+  var otaBtnLabel = document.getElementById('otaBtnLabel');
+
+  pBar.style.display = 'block';
+  otaBtnLabel.style.display = 'none';
+  otaStatus.innerText = "Yükleniyor: %0";
+  otaStatus.style.color = "#a0aec0";
+
+  xhr.upload.onprogress = function(e) {
+    if (e.lengthComputable) {
+      var percent = Math.round((e.loaded / e.total) * 100);
+      pFill.style.width = percent + '%';
+      if (percent < 100) {
+        otaStatus.innerText = "Yükleniyor: %" + percent;
+      } else {
+        otaStatus.innerText = "Flash belleğe yazılıyor ve doğrulanıyor...";
+        otaStatus.style.color = "#4ea8de";
+      }
+    }
+  };
+
+  xhr.onload = function() {
+    if (xhr.status === 200) {
+      var countdown = 6;
+      otaStatus.style.color = "#06d6a0";
+      
+      var timer = setInterval(function() {
+        countdown--;
+        if (countdown > 0) {
+          otaStatus.innerText = "Yükleme Başarılı! Başlatılıyor (" + countdown + " sn)...";
+        } else {
+          clearInterval(timer);
+          otaStatus.innerText = "Yenileniyor...";
+          // Önbelleği atlayarak temiz yenileme yapar
+          window.location.href = window.location.origin + '?t=' + Date.now();
+        }
+      }, 1000);
+
+    } else {
+      otaStatus.innerText = "Hata Oluştu! Kod: " + xhr.status;
+      otaStatus.style.color = "#e63946";
+      otaBtnLabel.style.display = 'inline-block';
+    }
+  };
+
+  xhr.onerror = function() {
+    otaStatus.innerText = "Ağ Hatası!";
+    otaStatus.style.color = "#e63946";
+    otaBtnLabel.style.display = 'inline-block';
+  };
+
+  xhr.open("POST", "/update", true);
+  xhr.send(file);
+}
 </script>
 </body>
 </html>
