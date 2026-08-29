@@ -21,14 +21,10 @@ static const char *TAG = "MOTOR_DRIVER";
 #define PWM_CHANNEL_L   LEDC_CHANNEL_0
 #define PWM_CHANNEL_R   LEDC_CHANNEL_1
 #define PWM_DUTY_RES    LEDC_TIMER_10_BIT
-#define PWM_FREQ        1000
+#define PWM_FREQ        5000
 #define MAX_DUTY        1023
 
-// --- Yumuşatma Filtre Katsayısı (Alpha) ---
-// 0.05 -> Çok yumuşak / süzülen tepki (Ağır İKA hissi)
-// 0.10 -> Dengeli yumuşaklık (Önerilen)
-// 0.20 -> Daha seri ama darbesiz tepki
-#define SMOOTHING_ALPHA 1.0f
+#define SMOOTHING_ALPHA 0.08f
 
 static volatile float target_left = 0.0f;
 static volatile float target_right = 0.0f;
@@ -36,11 +32,10 @@ static float filtered_left = 0.0f;
 static float filtered_right = 0.0f;
 
 static void apply_hardware_pwm(int left_speed, int right_speed) {
-    // Küçük ölü bölgeleri (Deadband) filtrele
     if (abs(left_speed) < 20) left_speed = 0;
     if (abs(right_speed) < 20) right_speed = 0;
 
-    // Sol Motor
+    // Sol Motor Sürüşü
     if (left_speed >= 0) {
         gpio_set_level(MOTOR_L_IN1, 1);
         gpio_set_level(MOTOR_L_IN2, 0);
@@ -53,7 +48,7 @@ static void apply_hardware_pwm(int left_speed, int right_speed) {
     ledc_set_duty(PWM_MODE, PWM_CHANNEL_L, left_duty);
     ledc_update_duty(PWM_MODE, PWM_CHANNEL_L);
 
-    // Sağ Motor
+    // Sağ Motor Sürüşü
     if (right_speed >= 0) {
         gpio_set_level(MOTOR_R_IN3, 1);
         gpio_set_level(MOTOR_R_IN4, 0);
@@ -67,10 +62,8 @@ static void apply_hardware_pwm(int left_speed, int right_speed) {
     ledc_update_duty(PWM_MODE, PWM_CHANNEL_R);
 }
 
-// 20ms periyotla çalışan filtreleme görevi (50 Hz)
 static void motor_filter_task(void *pvParameters) {
     while (1) {
-        // Üstel hareketli ortalama filtresi (EMA)
         filtered_left  += SMOOTHING_ALPHA * (target_left - filtered_left);
         filtered_right += SMOOTHING_ALPHA * (target_right - filtered_right);
 
@@ -123,12 +116,13 @@ void motor_init(void) {
     ledc_channel_config(&ch_r);
 
     xTaskCreate(motor_filter_task, "motor_filter_task", 2048, NULL, 5, NULL);
-    ESP_LOGI(TAG, "Dinamik filtreli yumusak motor kontrolu baslatildi.");
+    ESP_LOGI(TAG, "Motor surucu hazir.");
 }
 
 void motor_update(int throttle, int steer) {
-    int left = throttle + steer;
-    int right = throttle - steer;
+    // Sağ ve Sol palet atamaları ters çevrildi (Yer değişimi sağlandı)
+    int left = throttle - steer;
+    int right = throttle + steer;
 
     if (left > 1000) left = 1000;
     if (left < -1000) left = -1000;

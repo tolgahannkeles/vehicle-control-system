@@ -48,7 +48,7 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:24px; h
 <div class="card" id="c2">
   <div class="ctrl-box">
     <div class="slider-container">
-      <div class="slider-lbl">İLERİ / GERİ HIZ</div>
+      <div class="slider-lbl">HASSAS GAZ (SLIDER)</div>
       <input type="range" min="-1000" max="1000" value="0" class="vertical-slider" id="throttleSlider">
     </div>
     <div id="stick"><div id="knob"></div></div>
@@ -63,7 +63,6 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:24px; h
   <button class="stop-btn" onclick="emergencyStop()">ACİL DURDUR (E-STOP)</button>
   <div class="status" id="wsStat">Bağlantı Başlatılıyor...</div>
   
-  <!-- OTA Alanı -->
   <div class="ota-box">
     <div style="font-size:0.8rem; color:#a0aec0;">Kablosuz Güncelleme (OTA)</div>
     <input type="file" id="otaFile" accept=".bin" onchange="uploadFirmware()">
@@ -133,8 +132,16 @@ function sendControl() {
   }
 }
 
-throttleSlider.addEventListener('input', function(e) { throttle = parseInt(e.target.value); sendControl(); });
-function resetThrottle() { throttleSlider.value = 0; throttle = 0; sendControl(); }
+// Slider'dan manuel gaz verilirse
+throttleSlider.addEventListener('input', function(e) { 
+  throttle = parseInt(e.target.value); 
+  sendControl(); 
+});
+function resetThrottle() { 
+  throttleSlider.value = 0; 
+  throttle = 0; 
+  sendControl(); 
+}
 throttleSlider.addEventListener('touchend', resetThrottle);
 throttleSlider.addEventListener('mouseup', resetThrottle);
 
@@ -144,7 +151,9 @@ powerSlider.addEventListener('input', function(e) {
   sendControl();
 });
 
+// Joystick Mantığı (2 Eksen: X = Direksiyon, Y = Gaz)
 var stick = document.getElementById('stick'), knob = document.getElementById('knob'), dragging = false;
+
 function handleMove(clientX, clientY) {
   if (!isControlOwner && ws && ws.readyState === WebSocket.OPEN) return;
   var rect = stick.getBoundingClientRect();
@@ -152,11 +161,20 @@ function handleMove(clientX, clientY) {
   var dy = clientY - (rect.top + rect.height / 2);
   var dist = Math.min(60, Math.hypot(dx, dy));
   var angle = Math.atan2(dy, dx);
-  var kx = dist * Math.cos(angle), ky = dist * Math.sin(angle);
+  
+  var kx = dist * Math.cos(angle);
+  var ky = dist * Math.sin(angle);
   knob.style.transform = "translate(" + kx + "px, " + ky + "px)";
+  
+  // X ekseni -> Direksiyon (-1000 sol, +1000 sağ)
   steer = Math.round((kx / 60) * 1000);
+  // Y ekseni -> Gaz (-ky çünkü ekranda yukarı doğru Y eksi değerdir, ileri gaz pozitif olmalı)
+  throttle = Math.round((-ky / 60) * 1000);
+  throttleSlider.value = throttle;
+  
   sendControl();
 }
+
 stick.addEventListener('pointerdown', function(e) { dragging = true; handleMove(e.clientX, e.clientY); });
 window.addEventListener('pointermove', function(e) { if(dragging) handleMove(e.clientX, e.clientY); });
 window.addEventListener('pointerup', function() {
@@ -164,6 +182,8 @@ window.addEventListener('pointerup', function() {
     dragging = false;
     knob.style.transform = "translate(0px, 0px)";
     steer = 0;
+    throttle = 0;
+    throttleSlider.value = 0;
     sendControl();
   }
 });
@@ -171,13 +191,12 @@ window.addEventListener('pointerup', function() {
 function emergencyStop() {
   resetThrottle();
   steer = 0;
+  throttle = 0;
   knob.style.transform = "translate(0px, 0px)";
   sendControl();
 }
 setInterval(sendControl, 80);
 
-// --- OTA Upload Mantığı ---
-// --- OTA Upload Mantığı ---
 function uploadFirmware() {
   var fileInput = document.getElementById('otaFile');
   if (fileInput.files.length === 0) return;
@@ -211,7 +230,6 @@ function uploadFirmware() {
     if (xhr.status === 200) {
       var countdown = 6;
       otaStatus.style.color = "#06d6a0";
-      
       var timer = setInterval(function() {
         countdown--;
         if (countdown > 0) {
@@ -219,11 +237,9 @@ function uploadFirmware() {
         } else {
           clearInterval(timer);
           otaStatus.innerText = "Yenileniyor...";
-          // Önbelleği atlayarak temiz yenileme yapar
           window.location.href = window.location.origin + '?t=' + Date.now();
         }
       }, 1000);
-
     } else {
       otaStatus.innerText = "Hata Oluştu! Kod: " + xhr.status;
       otaStatus.style.color = "#e63946";
