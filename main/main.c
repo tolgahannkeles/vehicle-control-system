@@ -2,6 +2,7 @@
 #include "motor_driver.h"
 #include "wifi_ap.h"
 #include "web_ui.h"
+#include "uart_receiver.h"
 
 void app_main(void) {
     esp_err_t ret = nvs_flash_init();
@@ -12,6 +13,7 @@ void app_main(void) {
     ESP_ERROR_CHECK(ret);
 
     motor_init();
-    wifi_init_sta();       // Modeme bağlanana kadar bekler ve IP alır
-    start_webserver();     // Web sunucusunu başlatır
+    wifi_init_sta();       // Web Arayüzü ve OTA yine çalışmaya devam eder
+    start_webserver();
+    uart_receiver_init();  // Raspberry Pi'dan gelen komutları dinler
 }
