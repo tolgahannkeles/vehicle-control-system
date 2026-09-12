@@ -1,92 +1,358 @@
 <!DOCTYPE html>
-<html>
+<html lang="tr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>İKA Yer İstasyonu</title>
+<title>İKA GÖREV KONTROL MERKEZİ (GCS)</title>
 <style>
-body { margin:0; padding:15px; background:#121820; color:#e0e6ed; font-family:'Segoe UI',Roboto,sans-serif; user-select:none; touch-action:none; display:flex; flex-direction:column; align-items:center; }
-h2 { margin:5px 0 15px; font-weight:600; font-size:1.4rem; color:#4ea8de; }
-.card { background:#1e2632; border-radius:12px; padding:15px; box-shadow:0 4px 12px rgba(0,0,0,0.5); width:92%; max-width:420px; box-sizing:border-box; margin-bottom:15px; }
-.telemetry { display:flex; justify-content:space-around; text-align:center; font-size:0.85rem; }
-.val { font-size:1.2rem; font-weight:bold; color:#06d6a0; margin-top:4px; }
-.ctrl-box { display:flex; justify-content:space-around; align-items:center; margin:15px 0; }
-.slider-container { display:flex; flex-direction:column; align-items:center; width:45%; }
-.slider-lbl { font-size:0.8rem; margin-bottom:8px; color:#a0aec0; }
-input[type=range] { -webkit-appearance:none; width:140px; background:#2d3748; height:8px; border-radius:4px; outline:none; }
-input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:24px; height:24px; border-radius:50%; background:#4ea8de; cursor:pointer; box-shadow:0 0 8px rgba(78,168,222,0.8); }
-.vertical-slider { -webkit-appearance:none; width:180px; height:18px; border-radius:9px; background:#2d3748; transform:rotate(-90deg); margin:60px 0; outline:none; }
-.vertical-slider::-webkit-slider-thumb { -webkit-appearance:none; width:34px; height:34px; border-radius:50%; background:#06d6a0; cursor:pointer; }
-#stick { width:170px; height:170px; background:#283344; border-radius:50%; position:relative; touch-action:none; border:2px solid #3c4c62; display:flex; align-items:center; justify-content:center; }
-#knob { width:60px; height:60px; background:#4ea8de; border-radius:50%; position:absolute; box-shadow:0 0 10px rgba(78,168,222,0.6); pointer-events:none; }
-.stop-btn { width:100%; height:48px; background:#e63946; color:#fff; border:none; border-radius:8px; font-weight:bold; font-size:1.1rem; cursor:pointer; }
-.stop-btn:active { background:#b71c1c; transform:scale(0.98); }
-.status { font-size:0.85rem; color:#8d99ae; margin-top:8px; text-align:center; font-weight:bold; }
-.disabled-overlay { opacity:0.35; pointer-events:none; filter:grayscale(1); }
+  :root {
+    --bg-dark: #0b0f17;
+    --card-bg: rgba(22, 30, 44, 0.85);
+    --border-color: #243247;
+    --accent-blue: #00b4d8;
+    --accent-green: #06d6a0;
+    --accent-red: #ef476f;
+    --accent-yellow: #ffd166;
+    --text-primary: #e2e8f0;
+    --text-dim: #94a3b8;
+  }
 
-/* OTA Stilleri */
-.ota-box { border-top: 1px solid #2d3748; padding-top: 12px; margin-top: 5px; text-align: center; }
-.ota-box input[type=file] { display: none; }
-.ota-btn { background: #2d3748; border: 1px solid #4ea8de; color: #4ea8de; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: bold; display: inline-block; margin-top: 6px; }
-.ota-btn:hover { background: #4ea8de; color: #121820; }
-.progress-bar { width: 100%; height: 6px; background: #2d3748; border-radius: 3px; margin-top: 10px; overflow: hidden; display: none; }
-.progress-fill { width: 0%; height: 100%; background: #06d6a0; transition: width 0.2s; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 15px;
+    background: radial-gradient(circle at 50% 20%, #162235 0%, var(--bg-dark) 80%);
+    color: var(--text-primary);
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, monospace;
+    user-select: none;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  header {
+    width: 100%; max-width: 1300px;
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 2px solid var(--border-color);
+    padding-bottom: 10px; margin-bottom: 15px;
+  }
+  .title-box { display: flex; align-items: baseline; gap: 10px; }
+  h1 { font-size: 1.3rem; margin: 0; letter-spacing: 2px; color: var(--accent-blue); text-transform: uppercase; }
+  .sys-badge { font-size: 0.75rem; background: #1e293b; color: var(--accent-green); padding: 3px 8px; border-radius: 4px; border: 1px solid var(--accent-green); }
+
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: 1.6fr 1fr;
+    gap: 15px;
+    width: 100%;
+    max-width: 1300px;
+  }
+
+  @media (max-width: 950px) {
+    .dashboard-grid { grid-template-columns: 1fr; }
+  }
+
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 15px;
+    position: relative;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    backdrop-filter: blur(8px);
+  }
+
+  .card-hdr {
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    color: var(--accent-blue);
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 6px;
+    text-transform: uppercase;
+  }
+
+  /* HUD & Video Stream */
+  .viewport-container {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #000;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid #334155;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #cameraStream {
+    width: 100%; height: 100%;
+    object-fit: cover;
+  }
+  .hud-overlay {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    border: 1px solid rgba(0, 180, 216, 0.2);
+  }
+  .hud-reticle {
+    position: absolute; top: 50%; left: 50%;
+    width: 40px; height: 40px;
+    transform: translate(-50%, -50%);
+    border: 1px solid rgba(0, 180, 216, 0.5);
+    border-radius: 50%;
+  }
+  .hud-reticle::before, .hud-reticle::after {
+    content: ''; position: absolute; background: rgba(0, 180, 216, 0.7);
+  }
+  .hud-reticle::before { top: 50%; left: -10px; width: 60px; height: 1px; transform: translateY(-50%); }
+  .hud-reticle::after { top: -10px; left: 50%; width: 1px; height: 60px; transform: translateX(-50%); }
+
+  .hud-tag {
+    position: absolute;
+    font-size: 0.7rem; font-family: monospace;
+    color: var(--accent-green);
+    background: rgba(0,0,0,0.6);
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+  .cam-config {
+    margin-top: 10px;
+    display: flex;
+    gap: 8px;
+    font-size: 0.8rem;
+  }
+  .cam-input {
+    background: #0f172a;
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 5px 10px;
+    border-radius: 4px;
+    flex-grow: 1;
+  }
+
+  /* Telemetri */
+  .telemetry-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    text-align: center;
+    margin-bottom: 15px;
+  }
+  .telem-box {
+    background: #0f172a;
+    border: 1px solid var(--border-color);
+    padding: 10px;
+    border-radius: 6px;
+  }
+  .telem-label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; }
+  .telem-val { font-size: 1.3rem; font-weight: bold; color: var(--accent-green); margin-top: 4px; font-family: monospace; }
+
+  /* Kontroller */
+  .ctrl-box {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    margin: 10px 0;
+    touch-action: none;
+  }
+  .slider-container { display: flex; flex-direction: column; align-items: center; }
+  .slider-lbl { font-size: 0.75rem; margin-bottom: 6px; color: var(--text-dim); }
+
+  .vertical-slider {
+    -webkit-appearance: none;
+    width: 140px; height: 12px;
+    border-radius: 6px; background: #0f172a;
+    transform: rotate(-90deg);
+    margin: 45px 0; outline: none;
+    border: 1px solid var(--border-color);
+  }
+  .vertical-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--accent-green); cursor: pointer;
+    box-shadow: 0 0 10px rgba(6,214,160,0.6);
+  }
+
+  #stick {
+    width: 160px; height: 160px;
+    background: radial-gradient(circle, #1e293b 0%, #0f172a 100%);
+    border-radius: 50%; position: relative;
+    border: 2px solid var(--border-color);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: inset 0 0 15px rgba(0,0,0,0.6);
+  }
+  #knob {
+    width: 54px; height: 54px;
+    background: var(--accent-blue);
+    border-radius: 50%; position: absolute;
+    box-shadow: 0 0 15px rgba(0,180,216,0.8);
+    pointer-events: none;
+  }
+
+  .stop-btn {
+    width: 100%; height: 46px;
+    background: var(--accent-red);
+    color: #fff; border: none; border-radius: 6px;
+    font-weight: bold; font-size: 1rem; cursor: pointer;
+    letter-spacing: 1px;
+    box-shadow: 0 4px 15px rgba(239,71,111,0.4);
+    margin-top: 10px;
+  }
+  .stop-btn:active { background: #b71c1c; transform: scale(0.99); }
+
+  .status {
+    font-size: 0.8rem; color: var(--text-dim);
+    margin-top: 10px; text-align: center;
+    font-weight: 600; letter-spacing: 0.5px;
+  }
+  .disabled-overlay { opacity: 0.3; pointer-events: none; filter: grayscale(1); }
+
+  /* OTA */
+  .ota-box { border-top: 1px solid var(--border-color); padding-top: 10px; margin-top: 10px; text-align: center; }
+  .ota-box input[type=file] { display: none; }
+  .ota-btn {
+    background: #0f172a; border: 1px solid var(--accent-blue);
+    color: var(--accent-blue); padding: 6px 12px;
+    border-radius: 4px; cursor: pointer; font-size: 0.8rem;
+    display: inline-block;
+  }
+  .ota-btn:hover { background: var(--accent-blue); color: #000; }
+  .progress-bar { width: 100%; height: 5px; background: #0f172a; border-radius: 3px; margin-top: 8px; overflow: hidden; display: none; }
+  .progress-fill { width: 0%; height: 100%; background: var(--accent-green); transition: width 0.2s; }
 </style>
 </head>
 <body>
 
-<h2>İKA KONTROL PANELİ</h2>
-
-<div class="card" id="c1">
-  <div class="telemetry">
-    <div>Gaz / Hız<div class="val" id="tVal">%0</div></div>
-    <div>Direksiyon<div class="val" id="sVal">%0</div></div>
-    <div>Maks Güç<div class="val" id="pVal">%80</div></div>
+<header>
+  <div class="title-box">
+    <h1>İKA Görev Kontrol</h1>
+    <span class="sys-badge">CANLI TELEMETRİ</span>
   </div>
-</div>
+  <div id="clock" style="font-family:monospace; color:var(--text-dim); font-size:0.85rem;">00:00:00 UTC</div>
+</header>
 
-<div class="card" id="c2">
-  <div class="ctrl-box">
-    <div class="slider-container">
-      <div class="slider-lbl">HASSAS GAZ (SLIDER)</div>
-      <input type="range" min="-1000" max="1000" value="0" class="vertical-slider" id="throttleSlider">
+<div class="dashboard-grid">
+  <!-- SOL BÖLGE: FPV VİDEO AKIŞI VE HUD -->
+  <div class="card">
+    <div class="card-hdr">
+      <span>FPV Canlı Kamera Yayını (Raspberry Pi)</span>
+      <span id="camStatus" style="color:var(--accent-green);">ONLINE</span>
     </div>
-    <div id="stick"><div id="knob"></div></div>
-  </div>
-  <div class="slider-container" style="width:100%; margin-top:10px;">
-    <div class="slider-lbl">Hız Limiti (Maksimum Güç)</div>
-    <input type="range" min="100" max="1000" value="800" style="width:80%;" id="powerSlider">
-  </div>
-</div>
 
-<div class="card" style="padding:8px 15px;">
-  <button class="stop-btn" onclick="emergencyStop()">ACİL DURDUR (E-STOP)</button>
-  <div class="status" id="wsStat">Bağlantı Başlatılıyor...</div>
-  
-  <div class="ota-box">
-    <div style="font-size:0.8rem; color:#a0aec0;">Kablosuz Güncelleme (OTA)</div>
-    <input type="file" id="otaFile" accept=".bin" onchange="uploadFirmware()">
-    <label for="otaFile" class="ota-btn" id="otaBtnLabel">Yeni Firmware (.bin) Seç</label>
-    <div class="progress-bar" id="pBar"><div class="progress-fill" id="pFill"></div></div>
-    <div id="otaStatus" style="font-size:0.75rem; color:#a0aec0; margin-top:6px;"></div>
+    <div class="viewport-container">
+      <img id="cameraStream" src="http://192.168.1.155:8080/video_feed" alt="Kamera Akışı Bekleniyor..." onerror="camError()">
+      
+      <!-- HUD Çizgileri -->
+      <div class="hud-overlay">
+        <div class="hud-reticle"></div>
+        <div class="hud-tag" style="top:10px; left:10px;">CAM-01 [RAW MJPEG]</div>
+        <div class="hud-tag" style="bottom:10px; left:10px;" id="hudSpeed">SPD: %0</div>
+        <div class="hud-tag" style="bottom:10px; right:10px;" id="hudSteer">STR: %0</div>
+      </div>
+    </div>
+
+    <!-- Kamera IP Değiştirici -->
+    <div class="cam-config">
+      <input type="text" class="cam-input" id="camUrl" value="http://192.168.1.155:8080/video_feed">
+      <button class="ota-btn" onclick="updateCamStream()">Akışı Yenile</button>
+    </div>
+  </div>
+
+  <!-- SAĞ BÖLGE: TELEMETRİ VE SÜRÜŞ KONTROLLERİ -->
+  <div style="display:flex; flex-direction:column; gap:15px;">
+    
+    <div class="card" id="c1">
+      <div class="card-hdr">Sistem Telemetrisi</div>
+      <div class="telemetry-grid">
+        <div class="telem-box">
+          <div class="telem-label">Gaz / Hız</div>
+          <div class="telem-val" id="tVal">%0</div>
+        </div>
+        <div class="telem-box">
+          <div class="telem-label">Direksiyon</div>
+          <div class="telem-val" id="sVal">%0</div>
+        </div>
+        <div class="telem-box">
+          <div class="telem-label">Güç Limiti</div>
+          <div class="telem-val" id="pVal">%80</div>
+        </div>
+      </div>
+
+      <div class="slider-container" style="width:100%;">
+        <div class="slider-lbl">HIZ LİMİTİ ÇARPANI</div>
+        <input type="range" min="100" max="1000" value="800" style="width:90%; accent-color:var(--accent-blue);" id="powerSlider">
+      </div>
+    </div>
+
+    <div class="card" id="c2">
+      <div class="card-hdr">Sürüş Konsolu</div>
+      <div class="ctrl-box">
+        <div class="slider-container">
+          <div class="slider-lbl">DİKEY GAZ</div>
+          <input type="range" min="-1000" max="1000" value="0" class="vertical-slider" id="throttleSlider">
+        </div>
+        <div>
+          <div class="slider-lbl" style="text-align:center;">2-EKSEN DİREKSİYON</div>
+          <div id="stick"><div id="knob"></div></div>
+        </div>
+      </div>
+
+      <button class="stop-btn" onclick="emergencyStop()">ACİL FREN (E-STOP)</button>
+      <div class="status" id="wsStat">BAĞLANTI BEKLENİYOR...</div>
+
+      <!-- OTA Kutusu -->
+      <div class="ota-box">
+        <input type="file" id="otaFile" accept=".bin" onchange="uploadFirmware()">
+        <label for="otaFile" class="ota-btn" id="otaBtnLabel">Firmware Yükle (.bin)</label>
+        <div class="progress-bar" id="pBar"><div class="progress-fill" id="pFill"></div></div>
+        <div id="otaStatus" style="font-size:0.75rem; color:var(--text-dim); margin-top:4px;"></div>
+      </div>
+    </div>
+
   </div>
 </div>
 
 <script>
+// Saat
+setInterval(function() {
+  var d = new Date();
+  document.getElementById('clock').innerText = d.toTimeString().split(' ')[0] + " LOC";
+}, 1000);
+
+// Kamera Akışı Yönetimi
+function updateCamStream() {
+  var url = document.getElementById('camUrl').value;
+  var stream = document.getElementById('cameraStream');
+  stream.src = url + "?t=" + Date.now();
+  document.getElementById('camStatus').innerText = "ONLINE";
+  document.getElementById('camStatus').style.color = "var(--accent-green)";
+}
+
+function camError() {
+  document.getElementById('camStatus').innerText = "OFFLINE";
+  document.getElementById('camStatus').style.color = "var(--accent-red)";
+}
+
+// Telemetri ve WS İletişimi
 var ws = null, throttle = 0, steer = 0, maxPower = 0.8, isControlOwner = false;
 var myToken = "C_" + Math.floor(Math.random() * 899999 + 100000);
 
 var tVal = document.getElementById('tVal'), sVal = document.getElementById('sVal'), pVal = document.getElementById('pVal');
 var wsStat = document.getElementById('wsStat'), throttleSlider = document.getElementById('throttleSlider'), powerSlider = document.getElementById('powerSlider');
 var c1 = document.getElementById('c1'), c2 = document.getElementById('c2');
+var hudSpeed = document.getElementById('hudSpeed'), hudSteer = document.getElementById('hudSteer');
 
 function connectWS() {
   var host = window.location.host || "192.168.1.151";
   ws = new WebSocket("ws://" + host + "/ws");
   
   ws.onopen = function() {
-    wsStat.innerText = "CANLI BAĞLANTI KURULDU";
-    wsStat.style.color = "#4ea8de";
+    wsStat.innerText = "CANLI TELEMETRİ AKTİF";
+    wsStat.style.color = "var(--accent-blue)";
   };
   
   ws.onmessage = function(e) {
@@ -95,26 +361,26 @@ function connectWS() {
         isControlOwner = true;
         c1.classList.remove("disabled-overlay");
         c2.classList.remove("disabled-overlay");
-        wsStat.innerText = "KONTROL SİZDE (AKTİF)";
-        wsStat.style.color = "#06d6a0";
+        wsStat.innerText = "KONTROL SİSTEMDE (AKTİF)";
+        wsStat.style.color = "var(--accent-green)";
       }
     } else if (e.data === "LOCKED") {
       isControlOwner = false;
       c1.classList.add("disabled-overlay");
       c2.classList.add("disabled-overlay");
-      wsStat.innerText = "KİLİTLİ: BAŞKA BİR CİHAZ KONTROL EDİYOR!";
-      wsStat.style.color = "#e63946";
+      wsStat.innerText = "KİLİTLİ: BAŞKA İSTASYON BAĞLI";
+      wsStat.style.color = "var(--accent-red)";
     }
   };
   
   ws.onerror = function() {
-    wsStat.innerText = "Bağlantı Hatası!";
-    wsStat.style.color = "#e63946";
+    wsStat.innerText = "BAĞLANTI HATASI!";
+    wsStat.style.color = "var(--accent-red)";
   };
   
   ws.onclose = function() {
-    wsStat.innerText = "Koptu! Yeniden bağlanıyor...";
-    wsStat.style.color = "#e63946";
+    wsStat.innerText = "KOPTU! YENİDEN BAĞLANIYOR...";
+    wsStat.style.color = "var(--accent-red)";
     setTimeout(connectWS, 1500);
   };
 }
@@ -126,13 +392,17 @@ function sendControl() {
     var finalS = Math.round(steer * maxPower);
     ws.send(myToken + ";" + finalT + "," + finalS);
     if (isControlOwner) {
-      tVal.innerText = "%" + Math.round(finalT / 10);
-      sVal.innerText = "%" + Math.round(finalS / 10);
+      var pctT = Math.round(finalT / 10);
+      var pctS = Math.round(finalS / 10);
+      tVal.innerText = "%" + pctT;
+      sVal.innerText = "%" + pctS;
+      hudSpeed.innerText = "SPD: %" + pctT;
+      hudSteer.innerText = "STR: %" + pctS;
     }
   }
 }
 
-// Slider'dan manuel gaz verilirse
+// Slider İşlemleri
 throttleSlider.addEventListener('input', function(e) { 
   throttle = parseInt(e.target.value); 
   sendControl(); 
@@ -151,7 +421,7 @@ powerSlider.addEventListener('input', function(e) {
   sendControl();
 });
 
-// Joystick Mantığı (2 Eksen: X = Direksiyon, Y = Gaz)
+// Joystick
 var stick = document.getElementById('stick'), knob = document.getElementById('knob'), dragging = false;
 
 function handleMove(clientX, clientY) {
@@ -159,17 +429,15 @@ function handleMove(clientX, clientY) {
   var rect = stick.getBoundingClientRect();
   var dx = clientX - (rect.left + rect.width / 2);
   var dy = clientY - (rect.top + rect.height / 2);
-  var dist = Math.min(60, Math.hypot(dx, dy));
+  var dist = Math.min(50, Math.hypot(dx, dy));
   var angle = Math.atan2(dy, dx);
   
   var kx = dist * Math.cos(angle);
   var ky = dist * Math.sin(angle);
   knob.style.transform = "translate(" + kx + "px, " + ky + "px)";
   
-  // X ekseni -> Direksiyon (-1000 sol, +1000 sağ)
-  steer = Math.round((kx / 60) * 1000);
-  // Y ekseni -> Gaz (-ky çünkü ekranda yukarı doğru Y eksi değerdir, ileri gaz pozitif olmalı)
-  throttle = Math.round((-ky / 60) * 1000);
+  steer = Math.round((kx / 50) * 1000);
+  throttle = Math.round((-ky / 50) * 1000);
   throttleSlider.value = throttle;
   
   sendControl();
@@ -197,6 +465,7 @@ function emergencyStop() {
 }
 setInterval(sendControl, 80);
 
+// OTA Güncelleme
 function uploadFirmware() {
   var fileInput = document.getElementById('otaFile');
   if (fileInput.files.length === 0) return;
@@ -211,46 +480,25 @@ function uploadFirmware() {
   pBar.style.display = 'block';
   otaBtnLabel.style.display = 'none';
   otaStatus.innerText = "Yükleniyor: %0";
-  otaStatus.style.color = "#a0aec0";
 
   xhr.upload.onprogress = function(e) {
     if (e.lengthComputable) {
       var percent = Math.round((e.loaded / e.total) * 100);
       pFill.style.width = percent + '%';
-      if (percent < 100) {
-        otaStatus.innerText = "Yükleniyor: %" + percent;
-      } else {
-        otaStatus.innerText = "Flash belleğe yazılıyor ve doğrulanıyor...";
-        otaStatus.style.color = "#4ea8de";
-      }
+      otaStatus.innerText = percent < 100 ? "Yükleniyor: %" + percent : "Flash belleğe yazılıyor...";
     }
   };
 
   xhr.onload = function() {
     if (xhr.status === 200) {
-      var countdown = 6;
-      otaStatus.style.color = "#06d6a0";
-      var timer = setInterval(function() {
-        countdown--;
-        if (countdown > 0) {
-          otaStatus.innerText = "Yükleme Başarılı! Başlatılıyor (" + countdown + " sn)...";
-        } else {
-          clearInterval(timer);
-          otaStatus.innerText = "Yenileniyor...";
-          window.location.href = window.location.origin + '?t=' + Date.now();
-        }
-      }, 1000);
+      otaStatus.innerText = "Yükleme Başarılı! Cihaz yeniden başlatılıyor...";
+      otaStatus.style.color = "var(--accent-green)";
+      setTimeout(function() { window.location.reload(); }, 6000);
     } else {
-      otaStatus.innerText = "Hata Oluştu! Kod: " + xhr.status;
-      otaStatus.style.color = "#e63946";
+      otaStatus.innerText = "Hata! Kod: " + xhr.status;
+      otaStatus.style.color = "var(--accent-red)";
       otaBtnLabel.style.display = 'inline-block';
     }
-  };
-
-  xhr.onerror = function() {
-    otaStatus.innerText = "Ağ Hatası!";
-    otaStatus.style.color = "#e63946";
-    otaBtnLabel.style.display = 'inline-block';
   };
 
   xhr.open("POST", "/update", true);
