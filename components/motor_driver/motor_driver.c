@@ -5,6 +5,7 @@
 #include "driver/ledc.h"
 #include "esp_log.h"
 #include <math.h>
+#include <stdlib.h>
 
 static const char *TAG = "MOTOR_DRIVER";
 
@@ -20,56 +21,67 @@ static const char *TAG = "MOTOR_DRIVER";
 #define PWM_MODE        LEDC_LOW_SPEED_MODE
 #define PWM_CHANNEL_L   LEDC_CHANNEL_0
 #define PWM_CHANNEL_R   LEDC_CHANNEL_1
-#define PWM_DUTY_RES    LEDC_TIMER_10_BIT
+#define PWM_DUTY_RES    LEDC_TIMER_10_BIT // 0 - 1023
 #define PWM_FREQ        5000
 #define MAX_DUTY        1023
 
 #define SMOOTHING_ALPHA 0.08f
+#define ROBOT_MAX_MPS   0.60f // Maksimum çizgisel palet hızı (m/s)
 
-static volatile float target_left = 0.0f;
-static volatile float target_right = 0.0f;
-static float filtered_left = 0.0f;
-static float filtered_right = 0.0f;
+static volatile float s_target_left = 0.0f;
+static volatile float s_target_right = 0.0f;
+static float s_filtered_left = 0.0f;
+static float s_filtered_right = 0.0f;
 
 static void apply_hardware_pwm(int left_speed, int right_speed) {
-    if (abs(left_speed) < 20) left_speed = 0;
-    if (abs(right_speed) < 20) right_speed = 0;
+    // Ölü bölge (Deadband)
+    if (abs(left_speed) < 25) left_speed = 0;
+    if (abs(right_speed) < 25) right_speed = 0;
 
-    // Sol Motor Sürüşü
-    if (left_speed >= 0) {
+    // --- Sol Palet ---
+    uint32_t left_mag = (uint32_t)abs(left_speed);
+    if (left_mag > 1000) left_mag = 1000;
+    uint32_t left_duty = (left_mag * MAX_DUTY) / 1000;
+
+    if (left_speed > 0) {
         gpio_set_level(MOTOR_L_IN1, 1);
         gpio_set_level(MOTOR_L_IN2, 0);
-    } else {
+    } else if (left_speed < 0) {
         gpio_set_level(MOTOR_L_IN1, 0);
         gpio_set_level(MOTOR_L_IN2, 1);
-        left_speed = -left_speed;
+    } else {
+        gpio_set_level(MOTOR_L_IN1, 0);
+        gpio_set_level(MOTOR_L_IN2, 0);
     }
-    uint32_t left_duty = (uint32_t)((left_speed * MAX_DUTY) / 1000);
     ledc_set_duty(PWM_MODE, PWM_CHANNEL_L, left_duty);
     ledc_update_duty(PWM_MODE, PWM_CHANNEL_L);
 
-    // Sağ Motor Sürüşü
-    if (right_speed >= 0) {
+    // --- Sağ Palet ---
+    uint32_t right_mag = (uint32_t)abs(right_speed);
+    if (right_mag > 1000) right_mag = 1000;
+    uint32_t right_duty = (right_mag * MAX_DUTY) / 1000;
+
+    if (right_speed > 0) {
         gpio_set_level(MOTOR_R_IN3, 1);
         gpio_set_level(MOTOR_R_IN4, 0);
-    } else {
+    } else if (right_speed < 0) {
         gpio_set_level(MOTOR_R_IN3, 0);
         gpio_set_level(MOTOR_R_IN4, 1);
-        right_speed = -right_speed;
+    } else {
+        gpio_set_level(MOTOR_R_IN3, 0);
+        gpio_set_level(MOTOR_R_IN4, 0);
     }
-    uint32_t right_duty = (uint32_t)((right_speed * MAX_DUTY) / 1000);
     ledc_set_duty(PWM_MODE, PWM_CHANNEL_R, right_duty);
     ledc_update_duty(PWM_MODE, PWM_CHANNEL_R);
 }
 
 static void motor_filter_task(void *pvParameters) {
     while (1) {
-        filtered_left  += SMOOTHING_ALPHA * (target_left - filtered_left);
-        filtered_right += SMOOTHING_ALPHA * (target_right - filtered_right);
+        s_filtered_left  += SMOOTHING_ALPHA * (s_target_left - s_filtered_left);
+        s_filtered_right += SMOOTHING_ALPHA * (s_target_right - s_filtered_right);
 
-        apply_hardware_pwm((int)roundf(filtered_left), (int)roundf(filtered_right));
-
-        vTaskDelay(pdMS_TO_TICKS(20));
+        apply_hardware_pwm((int)roundf(s_filtered_left), (int)roundf(s_filtered_right));
+        vTaskDelay(pdMS_TO_TICKS(20)); // 50 Hz döngü
     }
 }
 
@@ -115,12 +127,34 @@ void motor_init(void) {
     };
     ledc_channel_config(&ch_r);
 
-    xTaskCreate(motor_filter_task, "motor_filter_task", 2048, NULL, 5, NULL);
-    ESP_LOGI(TAG, "Motor surucu hazir.");
+    motor_stop();
+    xTaskCreatePinnedToCore(motor_filter_task, "motor_filter", 2048, NULL, 5, NULL, 1);
+    ESP_LOGI(TAG, "Motor donanimi ve yumusatma filtresi hazir.");
 }
 
+void motor_set_targets(float left_mps, float right_mps) {
+    // EĞER SAĞ VE SOL TERSSE DOĞRUDAN BURADA DÜZELTİYORUZ:
+    float norm_l = (left_mps / ROBOT_MAX_MPS) * 1000.0f;
+    float norm_r = (right_mps / ROBOT_MAX_MPS) * 1000.0f;
+
+    // Sınırlandırmalar
+    if (norm_l > 1000.0f) norm_l = 1000.0f;
+    if (norm_l < -1000.0f) norm_l = -1000.0f;
+    if (norm_r > 1000.0f) norm_r = 1000.0f;
+    if (norm_r < -1000.0f) norm_r = -1000.0f;
+
+    // BURAYI DÜZELTTİK: left komutu sağ değişkene gidiyordu, tersini yapıyoruz:
+    s_target_left = norm_r;  // ya da tam tersi: hangisi yanlışsa çaprazla
+    s_target_right = norm_l;
+}
+
+void motor_stop(void) {
+    s_target_left = 0.0f;
+    s_target_right = 0.0f;
+}
+
+// Web UI'dan gelen normalize throttle ve steer değerlerini doğrudan hedefe yazar
 void motor_update(int throttle, int steer) {
-    // Sağ ve Sol palet atamaları ters çevrildi (Yer değişimi sağlandı)
     int left = throttle - steer;
     int right = throttle + steer;
 
@@ -129,11 +163,6 @@ void motor_update(int throttle, int steer) {
     if (right > 1000) right = 1000;
     if (right < -1000) right = -1000;
 
-    target_left = (float)left;
-    target_right = (float)right;
-}
-
-void motor_stop(void) {
-    target_left = 0.0f;
-    target_right = 0.0f;
+    s_target_left = (float)left;
+    s_target_right = (float)right;
 }

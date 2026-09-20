@@ -1,8 +1,25 @@
 #include "nvs_flash.h"
+#include "esp_log.h"
+#include <string.h>
+
 #include "motor_driver.h"
-#include "wifi_ap.h"
+#include "serial_bridge.h"
+#include "telemetry.h"
+#include "wifi_ap.h"   // wifi_init_sta() burada tanımlı
 #include "web_ui.h"
-#include "uart_receiver.h"
+#include "protocol.h"
+
+static const char *TAG = "MAIN";
+
+
+static void on_serial_packet_received(uint8_t pkt_id, const uint8_t *payload, uint8_t len) {
+    if (pkt_id == PKT_ID_CMD_VEL && len == sizeof(cmd_vel_payload_t)) {
+        cmd_vel_payload_t cmd;
+        memcpy(&cmd, payload, sizeof(cmd));
+        motor_set_targets(cmd.v_left, cmd.v_right);
+    }
+}
+
 
 void app_main(void) {
     esp_err_t ret = nvs_flash_init();
@@ -13,7 +30,11 @@ void app_main(void) {
     ESP_ERROR_CHECK(ret);
 
     motor_init();
-    wifi_init_sta();       // Web Arayüzü ve OTA yine çalışmaya devam eder
+    serial_bridge_init(on_serial_packet_received);
+    telemetry_init();
+
+    wifi_init_sta();
     start_webserver();
-    uart_receiver_init();  // Raspberry Pi'dan gelen komutları dinler
+
+    ESP_LOGI(TAG, "Tum sistem basariyla ayaga kaldirildi.");
 }
