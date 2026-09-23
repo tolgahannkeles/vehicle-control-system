@@ -23,10 +23,15 @@ typedef struct {
 } imu_payload_t;
 
 typedef struct {
-    double lat;
-    double lon;
-    uint8_t fix;
-} gps_payload_t;
+    double lat;       // Enlem (ondalık derece, örn: 41.020575) - 8 bayt
+    double lon;       // Boylam (ondalık derece, örn: 28.974120) - 8 bayt
+    float  alt;       // İrtifa / Yükseklik (metre) - 4 bayt
+    float  speed;     // Yer hızı (m/s) - 4 bayt
+    float  course;    // Hareket yönü (derece, 0-360) - 4 bayt
+    float  hdop;      // Yatay hassasiyet çarpanı - 4 bayt
+    uint8_t fix;      // 0: Yok, 1: 2D/3D GPS, 2: DGPS/RTK - 1 bayt
+    uint8_t sats;     // Kilitlenen uydu sayısı - 1 bayt
+} gps_payload_t;      // TOPLAM: 30 Bayt
 #pragma pack(pop)
 
 typedef enum {
