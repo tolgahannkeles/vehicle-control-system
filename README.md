@@ -49,7 +49,8 @@ On boot, `main.c` initializes, in order: `motor_init()` → `serial_bridge_init(
 | [`protocol`](components/protocol) | Defines the UART frame format: a state-machine-based byte-by-byte parser, XOR checksum computation, and the `cmd_vel_payload_t` / `imu_payload_t` / `gps_payload_t` structs. Hardware-independent. |
 | [`serial_bridge`](components/serial_bridge) | Wires `protocol` to the UART2 peripheral. Runs separate RX/TX FreeRTOS tasks (Core 0), delivers decoded packets to the upper layer via callback, and queues outgoing packets on a FreeRTOS queue. |
 | [`motor_driver`](components/motor_driver) | Manages PWM (LEDC) drive and direction GPIOs for both tracks, plus a deadband and exponential smoothing filter (50 Hz task, Core 1). Accepts both `motor_set_targets()` (m/s, ROS side) and `motor_update()` (-1000..1000, web joystick side) inputs. |
-| [`telemetry`](components/telemetry) | Generates placeholder (dummy) IMU data at 50 Hz and a dummy GPS coordinate at 1 Hz, sent to the Raspberry Pi via `serial_bridge`. **Not yet wired to a real IMU/GPS sensor** — see [Known Gaps](#known-gaps-and-risks). |
+| [`telemetry`](components/telemetry) | Reads real IMU data (via `imu_sensor`) at 50 Hz and sends a dummy GPS coordinate at 1 Hz, forwarded to the Raspberry Pi via `serial_bridge`. **GPS not yet wired to a real sensor** — see [Known Gaps](#known-gaps-and-risks). |
+| [`imu_sensor`](components/imu_sensor) | Drives an MPU6050 over I2C (`i2c_master` driver) to provide acceleration, angular rate, and die temperature readings to `telemetry`. |
 | [`wifi_ap`](components/wifi_ap) | Starts Wi-Fi in **station (STA) mode** and connects to a hardcoded home/office network (despite the name `wifi_ap`, it sets up STA, not AP, mode). Retries up to 10 times on disconnect. |
 | [`web_ui`](components/web_ui) | Serves `/` (static `index.html`, embedded in flash), `/ws` (WebSocket joystick control), and `/update` (OTA upload) via `esp_http_server`. Enforces a simple token-based "single-user lock" (session lock). |
 | [`ota_manager`](components/ota_manager) | A thin wrapper over `esp_ota_ops`: writes the raw firmware binary POSTed to `/update` into the inactive OTA partition, verifies it, and activates it via `esp_restart()`. |
@@ -72,7 +73,7 @@ Defined packet IDs (`PKT_ID_*`):
 | ID | Direction | Payload struct | Content |
 |---|---|---|---|
 | `0x01` `CMD_VEL` | RPi → ESP32 | `cmd_vel_payload_t { float v_left, v_right; }` | Independent left/right track speed (m/s) |
-| `0x10` `IMU` | ESP32 → RPi | `imu_payload_t { float ax,ay,az,gx,gy,gz; }` | Acceleration (m/s²) and angular rate (rad/s), 50 Hz |
+| `0x10` `IMU` | ESP32 → RPi | `imu_payload_t { float ax,ay,az,gx,gy,gz,temp; }` | Acceleration (m/s²), angular rate (rad/s), and die temperature (°C), 50 Hz |
 | `0x11` `GPS` | ESP32 → RPi | `gps_payload_t { double lat,lon; uint8_t fix; }` | Latitude/longitude and fix status, 1 Hz |
 
 Payload structs are packed with `#pragma pack(push, 1)`; both ends of the link (RPi C++ and ESP32 C) rely on the same memory layout — there is **no endianness conversion**, so both sides must be little-endian architectures (ARM/Xtensa).
@@ -150,7 +151,8 @@ Web interface access: `http://<esp32-ip>/`, via the IP address the ESP32 obtains
 ## Known Gaps and Risks
 
 - **Wi-Fi credentials are stored as plaintext in source code** (`WIFI_SSID`/`WIFI_PASS` in `wifi_ap.c`). Moving these to `Kconfig`/`menuconfig` or a separate NVS provisioning step would prevent the home/office network password from leaking if the repository is ever shared unintentionally.
-- **The `telemetry` module does not produce real sensor data** — the IMU and GPS payloads are fixed/dummy values (`az = 9.81`, a steadily incrementing latitude/longitude). Integration with a real IMU (e.g. MPU6050/BNO055) and GPS module is still pending.
+- **GPS is still a dummy value** — the `gps_payload_t` sent over the wire is a steadily incrementing latitude/longitude, not a real fix. IMU is now read from a real MPU6050 via `imu_sensor`. Integration with a real GPS module is still pending.
+- **The `imu_payload_t` wire struct changed** (a `temp` field was appended). Since both ends of the UART link rely on identical memory layout with no version negotiation, the counterpart parser in `tracked_hardware/esp32_bridge` (main ROS 2 repo) must be updated to match before flashing this firmware, or IMU frames will be misparsed.
 - **No arbitration between the UART and WebSocket command paths**: if a `cmd_vel` from ROS and a command from the web joystick are both active, whichever writes last wins; there is no equivalent here to the `twist_mux` used in the main ROS repository.
 - **The `/update` endpoint performs no authentication or signature verification** — any device on the network can overwrite the firmware. Before production use, at least a simple shared-secret check or signed-image verification is recommended.
 - **The UART CRC is XOR-based** (not a real CRC-8/16); it can mask multi-bit errors that cancel each other out. A noisy line (long cable, EMI) would benefit from a stronger CRC.

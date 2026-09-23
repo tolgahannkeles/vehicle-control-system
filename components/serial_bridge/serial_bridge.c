@@ -13,6 +13,7 @@ static const char *TAG = "SERIAL_BRIDGE";
 #define UART_PORT         UART_NUM_2
 #define UART_BAUD_RATE    115200
 #define UART_RX_BUF_SIZE  1024
+#define UART_TX_BUF_SIZE  1024
 #define UART_TX_PIN       GPIO_NUM_17
 #define UART_RX_PIN       GPIO_NUM_16
 
@@ -25,11 +26,13 @@ static QueueHandle_t s_tx_queue = NULL;
 static serial_rx_callback_t s_rx_callback = NULL;
 
 bool serial_bridge_send_packet(uint8_t pkt_id, const uint8_t *payload, uint8_t payload_len) {
-    if (s_tx_queue == NULL || (payload_len + 5) > sizeof(((tx_packet_t *)0)->data)) {
+    tx_packet_t pkt;
+
+    // Kuyruk hazır değilse veya paket boyutu tamponu aşıyorsa reddet
+    if (s_tx_queue == NULL || (payload_len + 5) > sizeof(pkt.data)) {
         return false;
     }
 
-    tx_packet_t pkt;
     pkt.data[0] = FRAME_HEADER1;
     pkt.data[1] = FRAME_HEADER2;
     pkt.data[2] = pkt_id;
@@ -40,7 +43,8 @@ bool serial_bridge_send_packet(uint8_t pkt_id, const uint8_t *payload, uint8_t p
     pkt.data[4 + payload_len] = protocol_calc_crc(pkt_id, payload_len, payload);
     pkt.len = payload_len + 5;
 
-    return (xQueueSend(s_tx_queue, &pkt, 0) == pdTRUE);
+    // Kuyruk doluysa paketi çöpe atmak yerine 10 ms kadar bekle
+    return (xQueueSend(s_tx_queue, &pkt, pdMS_TO_TICKS(10)) == pdTRUE);
 }
 
 static void uart_tx_task(void *pvParameters) {
@@ -62,7 +66,6 @@ static void uart_rx_task(void *pvParameters) {
     while (1) {
         if (uart_read_bytes(UART_PORT, &byte, 1, portMAX_DELAY) > 0) {
             if (protocol_parse_byte(&parser, byte, &id, payload, &len)) {
-                // Paket çözüldü, ne olduğuna bakmaksızın üst katmana pasla
                 if (s_rx_callback) {
                     s_rx_callback(id, payload, len);
                 }
@@ -81,15 +84,23 @@ esp_err_t serial_bridge_init(serial_rx_callback_t rx_cb) {
         .stop_bits = UART_STOP_BITS_1,
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE
     };
+
     ESP_ERROR_CHECK(uart_param_config(UART_PORT, &uart_config));
     ESP_ERROR_CHECK(uart_set_pin(UART_PORT, UART_TX_PIN, UART_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
-    ESP_ERROR_CHECK(uart_driver_install(UART_PORT, UART_RX_BUF_SIZE, 0, 0, NULL, 0));
+    
+    // Donanımsal TX halka tamponu (1024 bayt) tahsis edildi
+    ESP_ERROR_CHECK(uart_driver_install(UART_PORT, UART_RX_BUF_SIZE, UART_TX_BUF_SIZE, 0, NULL, 0));
 
-    s_tx_queue = xQueueCreate(16, sizeof(tx_packet_t));
+    // Kuyruk boyutu 32 pakete çıkarıldı
+    s_tx_queue = xQueueCreate(32, sizeof(tx_packet_t));
+    if (s_tx_queue == NULL) {
+        ESP_LOGE(TAG, "TX kuyrugu olusturulamadi!");
+        return ESP_FAIL;
+    }
 
     xTaskCreatePinnedToCore(uart_rx_task, "uart_rx", 3072, NULL, 10, NULL, 0);
     xTaskCreatePinnedToCore(uart_tx_task, "uart_tx", 3072, NULL, 9, NULL, 0);
 
-    ESP_LOGI(TAG, "Serial Bridge hazır (Soyut taşıma katmanı).");
+    ESP_LOGI(TAG, "Serial Bridge basariyla baslatildi.");
     return ESP_OK;
 }

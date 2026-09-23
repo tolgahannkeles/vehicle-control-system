@@ -5,6 +5,7 @@
 #include "motor_driver.h"
 #include "serial_bridge.h"
 #include "telemetry.h"
+#include "imu_sensor.h"
 #include "wifi_ap.h"   // wifi_init_sta() burada tanımlı
 #include "web_ui.h"
 #include "protocol.h"
@@ -31,6 +32,8 @@ void app_main(void) {
 
     motor_init();
     serial_bridge_init(on_serial_packet_received);
+
+    imu_sensor_init();
     telemetry_init();
 
     wifi_init_sta();

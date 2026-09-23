@@ -1,6 +1,7 @@
 #include "telemetry.h"
 #include "serial_bridge.h"
 #include "protocol.h"
+#include "imu_sensor.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
@@ -17,11 +18,10 @@ void telemetry_task(void *pvParameters) {
 
     while (1) {
         // 50 Hz IMU Telemetrisi
-        imu_payload_t imu_data = {
-            .ax = 0.0f, .ay = 0.0f, .az = 9.81f,
-            .gx = 0.0f, .gy = 0.0f, .gz = 0.0f
-        };
-        serial_bridge_send_packet(PKT_ID_IMU, (const uint8_t *)&imu_data, sizeof(imu_data));
+        imu_payload_t imu_data;
+        if (imu_sensor_read(&imu_data) == ESP_OK) {
+            serial_bridge_send_packet(PKT_ID_IMU, (const uint8_t *)&imu_data, sizeof(imu_data));
+        }
 
         // 1 Hz GPS Telemetrisi
         if (++count >= 50) {

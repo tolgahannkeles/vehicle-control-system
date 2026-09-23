@@ -19,6 +19,7 @@ typedef struct {
 typedef struct {
     float ax, ay, az; // m/s^2
     float gx, gy, gz; // rad/s
+    float temp;       // °C
 } imu_payload_t;
 
 typedef struct {
